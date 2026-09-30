@@ -1,8 +1,8 @@
 // Package render turns a page of a PDF into pixels.
 //
 // It reads with github.com/go-pdfkit/reader and rasterises with
-// github.com/go-gfx/gfx. Nothing outside those and the standard library is
-// used, so it builds for js/wasm and for every architecture the fleet targets
+// github.com/timzifer/stilus (or go-gfx when selected). The dependencies are pure Go;
+// it builds for js/wasm and for every architecture the fleet targets
 // — which is what lets a PDF be shown in a browser tab with nothing on the far
 // end.
 package render
@@ -21,6 +21,8 @@ import (
 
 // Options say how a page is to be drawn.
 type Options struct {
+	// Backend selects path, stroke and glyph rasterisation. Zero uses Stilus.
+	Backend Backend
 	// Scale is device pixels per point. Zero means one, which is seventy-two
 	// to the inch; [Options.DPI] is the same thing said the other way.
 	Scale float64
@@ -158,6 +160,9 @@ func Page(d *reader.Document, i int, opt Options) (*raster.Image, error) {
 	resources, _ := d.GetDict(page, "Resources")
 	r := &renderer{doc: d, img: img, fonts: map[int]*pdfFont{},
 		softMasks: map[softMaskKey][]uint8{}, iccSpaces: map[int]*space{}}
+	if opt.Backend != BackendGFX {
+		r.sparse = &sparseRaster{opaque: opt.background().A == 255}
+	}
 	if !opt.AllLayers {
 		r.oc = readOptional(d)
 	}
@@ -173,7 +178,7 @@ func Page(d *reader.Document, i int, opt Options) (*raster.Image, error) {
 	if r.ranOut {
 		return img, ErrTimedOut
 	}
-	return img, nil
+	return img, r.rasterErr
 }
 
 // fill paints the whole image one colour.

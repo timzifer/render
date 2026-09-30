@@ -1,0 +1,18 @@
+Go 1.26.4, darwin/arm64 (Apple M4)
+go test -coverprofile: PASS, exact 100% statement coverage
+go test -race: PASS
+go vet: PASS
+harness go test against published replacement: PASS
+
+CGO_ENABLED=0 cross-builds (not native/emulated target tests):
+linux/amd64 PASS
+linux/arm64 PASS
+linux/riscv64 PASS
+linux/loong64 PASS
+linux/ppc64le PASS
+linux/s390x PASS
+js/wasm PASS
+darwin/arm64 PASS
+windows/amd64 PASS
+linux/386 PASS
+linux/arm PASS

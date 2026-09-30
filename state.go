@@ -68,9 +68,11 @@ func (g gstate) clone() gstate {
 
 // A renderer draws one page.
 type renderer struct {
-	doc *reader.Document
-	img *raster.Image
-	rz  vector.Rasterizer
+	doc       *reader.Document
+	img       *raster.Image
+	rz        vector.Rasterizer
+	sparse    *sparseRaster
+	rasterErr error
 
 	// depth bounds how far one form may draw another.
 	depth int

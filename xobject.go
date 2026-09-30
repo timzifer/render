@@ -177,14 +177,14 @@ func boxBounds(m geometry.Matrix, box [4]float64, w, h int) image.Rectangle {
 
 // clipToBox narrows the clip to a rectangle in the current user space.
 func (r *renderer) clipToBox(g *gstate, box [4]float64) {
-	path := newRectPath(g.ctm, box)
-	cov, ox, oy, w, h, ok := r.rz.Fill(path, 0, r.img.W, r.img.H)
+	path := r.newRectPath(g.ctm, box)
+	cov, ox, oy, w, h, ok := r.pathCoverage(path, vector.NonZero, nil)
 	r.narrow(g, cov, ox, oy, w, h, ok)
 }
 
 // newRectPath is the four corners of a rectangle, transformed.
-func newRectPath(m geometry.Matrix, box [4]float64) *vector.Path {
-	p := vector.NewPath()
+func (r *renderer) newRectPath(m geometry.Matrix, box [4]float64) *renderPath {
+	p := r.newPath()
 	corners := [][2]float64{{box[0], box[1]}, {box[2], box[1]}, {box[2], box[3]}, {box[0], box[3]}}
 	for i, c := range corners {
 		pt := m.TransformPoint(geometry.Point{X: c[0], Y: c[1]})

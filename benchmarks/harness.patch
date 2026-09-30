@@ -1,0 +1,103 @@
+diff --git a/harness/engine/engine.go b/harness/engine/engine.go
+index ce1368b..b384091 100644
+--- a/harness/engine/engine.go
++++ b/harness/engine/engine.go
+@@ -30,10 +30,12 @@ func New(name string) (Engine, error) {
+ 	switch strings.ToLower(name) {
+ 	case "pdfkit", "go-pdfkit":
+ 		return PDFKit{}, nil
++	case "pdfkit-stilus":
++		return PDFKit{Sparse: true}, nil
+ 	case "pdfium":
+ 		return NewPDFium()
+ 	case "stilus":
+ 		return Stilus{}, nil
+ 	}
+-	return nil, fmt.Errorf("unknown engine %q (pdfkit, pdfium, stilus)", name)
++	return nil, fmt.Errorf("unknown engine %q (pdfkit, pdfkit-stilus, pdfium, stilus)", name)
+ }
+diff --git a/harness/engine/pdfkit.go b/harness/engine/pdfkit.go
+index c96fbe7..6348eef 100644
+--- a/harness/engine/pdfkit.go
++++ b/harness/engine/pdfkit.go
+@@ -10,27 +10,42 @@ import (
+ 
+ // PDFKit renders with github.com/go-pdfkit/render (go-gfx rasterizer): the
+ // "today" baseline of the spec.
+-type PDFKit struct{}
++type PDFKit struct {
++	// Sparse selects the Stilus backend in the render fork.
++	Sparse bool
++}
+ 
+-func (PDFKit) Name() string { return "pdfkit" }
++func (e PDFKit) Name() string {
++	if e.Sparse {
++		return "pdfkit-stilus"
++	}
++	return "pdfkit"
++}
+ func (PDFKit) GoHeap() bool { return true }
+ func (PDFKit) Close() error { return nil }
+ 
+-func (PDFKit) Open(data []byte) (Doc, error) {
++func (e PDFKit) Open(data []byte) (Doc, error) {
+ 	d, err := reader.Open(data)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	return pdfkitDoc{d}, nil
++	backend := render.BackendGFX
++	if e.Sparse {
++		backend = render.BackendStilus
++	}
++	return pdfkitDoc{d: d, backend: backend}, nil
+ }
+ 
+-type pdfkitDoc struct{ d *reader.Document }
++type pdfkitDoc struct {
++	d       *reader.Document
++	backend render.Backend
++}
+ 
+ func (d pdfkitDoc) Pages() int { return d.d.PageCount() }
+ func (d pdfkitDoc) Close()     {}
+ 
+ func (d pdfkitDoc) Render(page int, dpi float64) (image.Image, error) {
+-	img, err := render.Page(d.d, page+1, render.Options{DPI: dpi, MaxDuration: time.Minute})
++	img, err := render.Page(d.d, page+1, render.Options{Backend: d.backend, DPI: dpi, MaxDuration: time.Minute})
+ 	if img == nil {
+ 		return nil, err
+ 	}
+diff --git a/harness/go.mod b/harness/go.mod
+index 6c87be1..710dca8 100644
+--- a/harness/go.mod
++++ b/harness/go.mod
+@@ -30,3 +30,5 @@ require (
+ 	golang.org/x/sys v0.48.0 // indirect
+ 	golang.org/x/text v0.42.0 // indirect
+ )
++
++replace github.com/go-pdfkit/render => github.com/timzifer/render v0.0.0-20260930061732-1b5ffd9790de
+diff --git a/harness/go.sum b/harness/go.sum
+index be861a7..7a3e24f 100644
+--- a/harness/go.sum
++++ b/harness/go.sum
+@@ -22,8 +22,6 @@ github.com/go-pdfkit/pdffont v0.3.1 h1:+K7opHGRERDZ5EMkA12s1GT48t8GpncArhnyzyc5b
+ github.com/go-pdfkit/pdffont v0.3.1/go.mod h1:eFJ/7t9AvcX76KY5qNJMMKetz8hUUUdVM1qSWLi3S1g=
+ github.com/go-pdfkit/reader v0.6.0 h1:KAabNOYUcTlZlNBTbG9bEhWP1NiZhjuhzUdavdTdfes=
+ github.com/go-pdfkit/reader v0.6.0/go.mod h1:fQFOVfCMUui1AdvD4qhimdyvvNr9KvvJ1S7IuKZjyV8=
+-github.com/go-pdfkit/render v0.67.0 h1:5PB8HaWPpWYfcsTMYAFO2CWHQkYO6VTQ+S5455jyuVk=
+-github.com/go-pdfkit/render v0.67.0/go.mod h1:uq6fkICiu8kxBc2y5JU7OyirEozzFz875U2KkpunDMM=
+ github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1vB6EwHI=
+ github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
+ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+@@ -53,6 +51,8 @@ github.com/tannevaled/gobig2 v0.2.0 h1:yx97/ltljALrIWDFVqHjPUIjAp3bfUUhH8Z8UROvN
+ github.com/tannevaled/gobig2 v0.2.0/go.mod h1:X0S1H+N35kg6zYgVYRqGMsGj3C35zs+iA2r1MXyPcV4=
+ github.com/tetratelabs/wazero v1.12.0 h1:DuWcpNu/FzgEXgGBDp8J1Spc+CWOvvtvVyjKlaZopYU=
+ github.com/tetratelabs/wazero v1.12.0/go.mod h1:LvKtzl2RqO4gyF27BiXU+nKAjcV8f38U+kP/q2vgxh0=
++github.com/timzifer/render v0.0.0-20260930061732-1b5ffd9790de h1:CoqjB5rdhhEOEraJU76o+T5V3SzR2lv+kmTZM3EZMIs=
++github.com/timzifer/render v0.0.0-20260930061732-1b5ffd9790de/go.mod h1:e8d0h0Phgmuw8isRpR218XJ74xf3IZ8v6j+Q5Vu14wM=
+ go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
+ go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
+ golang.org/x/image v0.46.0 h1:b1+oYj0Jbp6K5MDT4i4/eZpYlk3V8SJhhDKh6LBHAyQ=

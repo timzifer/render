@@ -17,6 +17,35 @@ shapes and outlines it with
 builds for `GOOS=js/wasm` and every architecture the fleet targets, which is
 what lets a PDF be shown in a browser tab with nothing on the far end.
 
+## Stilus backend (this fork)
+
+Paths, strokes, glyphs and clip masks use the sparse pure-Go
+[`stilus`](https://github.com/timzifer/stilus) rasteriser by default. Solid
+marks stream coverage spans into the existing compositor; opaque marks on
+opaque paper with rectangular clips use Stilus' Canvas and analytic stroke
+kernels. Patterns and clip consumers still receive a dense coverage grid.
+Images, font loading, PDF interpretation, shadings and soft-mask evaluation
+remain in the existing PDF pipeline. The result remains straight-alpha RGBA.
+
+```go
+// Sparse backend (also the zero-value default).
+img, err := render.Page(doc, 1, render.Options{DPI: 150})
+// Select the original go-gfx algorithms for comparison.
+img, err = render.Page(doc, 1, render.Options{DPI: 150, Backend: render.BackendGFX})
+```
+
+The module keeps the upstream import path. In a consuming application, pin
+this fork with a Go module replacement (see the benchmark report for the
+revision). Stilus is pinned to `11ece9a90ee5`; no local replacement is needed.
+Its exact-area coverage and float32 path coordinates can change edge pixels
+relative to go-gfx. Device-space paths and upstream's average stroke-width
+scaling are retained. Geometry budget failures return a partial page and an
+error. Nested fractional clips multiply their coverage through the span
+compositor rather than intersecting their rectangles geometrically.
+
+Measured end-to-end results and reproduction instructions:
+[benchmarks/stilus.md](benchmarks/stilus.md).
+
 ## What it draws
 
 The graphics half of the format: the transform stack, path construction

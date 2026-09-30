@@ -27,7 +27,7 @@ func (r *renderer) run(content []byte, resources reader.Dict, g gstate) {
 	r.mc, r.hideAt = 0, 0
 	defer func() { r.mc, r.hideAt = mc, hideAt }()
 	stack := []gstate{}
-	path := vector.NewPath()
+	path := r.newPath()
 	var start, current geometry.Point
 	var open bool
 	clip := noClip
@@ -139,7 +139,7 @@ func (r *renderer) run(content []byte, resources reader.Dict, g gstate) {
 
 		case "S", "s", "f", "F", "f*", "B", "B*", "b", "b*", "n":
 			r.paintPath(&g, path, op.Operator, clip, resources, rect)
-			path = vector.NewPath()
+			path = r.newPath()
 			rect, segments = nil, 0
 			open = false
 			clip = noClip
@@ -222,7 +222,7 @@ func (r *renderer) deviceRect(g *gstate, n []float64) *vector.Rect {
 
 // rectangle adds the four corners of a re operator, which is a closed subpath
 // of its own.
-func (r *renderer) rectangle(g *gstate, path *vector.Path, n []float64) {
+func (r *renderer) rectangle(g *gstate, path *renderPath, n []float64) {
 	x, y, w, h := n[0], n[1], n[2], n[3]
 	corners := [][2]float64{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}
 	for i, c := range corners {
@@ -238,7 +238,7 @@ func (r *renderer) rectangle(g *gstate, path *vector.Path, n []float64) {
 
 // paintPath draws the path that has been built, in whichever of the ten ways
 // the operator asks for, and then narrows the clip if one was pending.
-func (r *renderer) paintPath(g *gstate, path *vector.Path, op string, clip pendingClip, resources reader.Dict, rect *vector.Rect) {
+func (r *renderer) paintPath(g *gstate, path *renderPath, op string, clip pendingClip, resources reader.Dict, rect *vector.Rect) {
 	switch op {
 	case "s", "b", "b*":
 		path.Close()
@@ -248,16 +248,10 @@ func (r *renderer) paintPath(g *gstate, path *vector.Path, op string, clip pendi
 		rule = vector.EvenOdd
 	}
 	if fills(op) && !r.suppressed() {
-		cov, ox, oy, w, h, ok := r.rz.Fill(path, rule, r.img.W, r.img.H)
-		if ok {
-			r.paintCoverage(g, g.fillPattern, cov, ox, oy, w, h, g.fill, g.fillAlpha, resources)
-		}
+		r.drawPath(g, path, rule, nil, g.fillPattern, g.fill, g.fillAlpha, resources)
 	}
 	if strokes(op) && !r.suppressed() {
-		cov, ox, oy, w, h, ok := r.rz.StrokeWith(path, r.strokeStyle(g), r.img.W, r.img.H)
-		if ok {
-			r.paintCoverage(g, g.strokePattern, cov, ox, oy, w, h, g.stroke, g.strokeAlpha, resources)
-		}
+		r.drawPath(g, path, vector.NonZero, ptrStyle(r.strokeStyle(g)), g.strokePattern, g.stroke, g.strokeAlpha, resources)
 	}
 	if clip == noClip {
 		return
@@ -273,7 +267,7 @@ func (r *renderer) paintPath(g *gstate, path *vector.Path, op string, clip pendi
 		r.narrowRect(g, *rect, ox, oy, w, h, ok)
 		return
 	}
-	cov, ox, oy, w, h, ok := r.rz.Fill(path, rule, r.img.W, r.img.H)
+	cov, ox, oy, w, h, ok := r.pathCoverage(path, rule, nil)
 	r.narrow(g, cov, ox, oy, w, h, ok)
 }
 
