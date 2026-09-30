@@ -11,6 +11,8 @@ require (
 
 require github.com/go-pdfkit/pdffont v0.3.1
 
+require github.com/timzifer/stilus v0.0.0-20260930055150-11ece9a90ee5
+
 require (
 	github.com/ajroetker/go-highway v0.0.12 // indirect
 	github.com/go-images/jpeg v0.1.0
